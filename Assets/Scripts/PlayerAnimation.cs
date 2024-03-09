@@ -17,6 +17,23 @@ public class PlayerAnimation : MonoBehaviour
     private bool isMovingBackward = false;
     private bool isGrounded;
 
+    public GemManager gemas;
+    public KeyManager keys;
+
+    public GameObject feet;
+    public GameObject run;
+    public AudioClip touchSound; // Sound clip to play when the character touches something
+    public float volume = 1f; // Volume of the sound clip
+
+    private AudioSource audioSource;
+    public GameObject winScreen;
+
+
+    private bool treasure;
+    private GameObject chest;
+    private int tesoros = 2;
+
+
     void Start()
     {
         animator = GetComponent<Animator>();
@@ -25,8 +42,13 @@ public class PlayerAnimation : MonoBehaviour
         if (freelookCamera == null)
         {
             freelookCamera = FindObjectOfType<CinemachineFreeLook>();
-            freelookCamera.m_XAxis.m_InputAxisName = "";
+            //freelookCamera.m_XAxis.m_InputAxisName = "";
             freelookCamera.m_YAxis.m_InputAxisName = "";
+        }
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null || touchSound == null)
+        {
+            Debug.LogError("AudioSource or AudioClip is not assigned.");
         }
     }
 
@@ -37,11 +59,45 @@ public class PlayerAnimation : MonoBehaviour
 
         Vector3 movement = GetMovementDirection(horizontalInput, verticalInput);
 
+        Debug.Log(tesoros);
+
+        if (chest != null && Input.GetKeyDown(KeyCode.T))
+        {
+            chest.SetActive(false);
+            Collider chestCollider = chest.GetComponent<Collider>(); // Get the collider component
+            if (chestCollider != null)
+            {
+                chestCollider.enabled = false; // Disable the collider
+            }
+            tesoros -= 1;
+            chest = null;
+            gemas.treasures--;
+
+        }
+
         if (movement.magnitude > 0.1f)
         {
             animator.SetBool("isMoving", true);
+            feet.SetActive(true);
 
             // Disable input to the Freelook camera
+
+            if (Input.GetKey(KeyCode.LeftShift) && movement.magnitude > 0.1f)
+            {
+                animator.SetBool("isRunning", true);
+                moveSpeed = 8f;
+                feet.SetActive(false);
+                run.SetActive(true);
+
+            }
+            else
+            {
+                animator.SetBool("isRunning", false);
+                moveSpeed = 5f;
+                feet.SetActive(true);
+                run.SetActive(false);
+
+            }
 
 
             // Calculate the target rotation
@@ -67,8 +123,7 @@ public class PlayerAnimation : MonoBehaviour
         {
             animator.SetBool("isMoving", false);
             isMovingBackward = false;
-
-
+            feet.SetActive(false);
         }
 
         isGrounded = IsGrounded(); // Now assigning the value returned by IsGrounded to the isGrounded variable
@@ -76,9 +131,17 @@ public class PlayerAnimation : MonoBehaviour
         if (isGrounded && Input.GetButtonDown("Jump")) // Now using the isGrounded variable directly
         {
             Jump();
-
         }
 
+        // Return to normal state after the jump animation finishes playing
+        if (!animator.GetCurrentAnimatorStateInfo(0).IsName("Jump"))
+        {
+            animator.SetBool("isJumping", false);
+        }
+        if (tesoros == 0)
+        {
+            ShowWinScreen();
+        }
     }
 
     private bool IsGrounded()
@@ -89,11 +152,10 @@ public class PlayerAnimation : MonoBehaviour
         {
             if (hit.collider.CompareTag(groundTag))
             {
-                animator.SetBool("isJumping", false);
                 return true;
             }
+            Debug.Log(hit.collider.tag);
         }
-        animator.SetBool("isJumping", true);
         return false;
     }
 
@@ -108,10 +170,65 @@ public class PlayerAnimation : MonoBehaviour
         return movement;
     }
 
+    void ShowWinScreen()
+    {
+        // Activate the win screen UI element
+        winScreen.SetActive(true);
+    }
+
     private void Jump()
     {
+        // Play the jump animation
+        animator.SetBool("isJumping", true);
+
         // Apply jump force only when the character is grounded
         GetComponent<Rigidbody>().AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+    }
+
+    void OnTriggerEnter(Collider other)
+
+    {
+
+        if (other.gameObject.CompareTag("Gema"))
+        {
+            gemas.count++;
+            Destroy(other.gameObject);
+            audioSource.PlayOneShot(touchSound, volume);
+        }
+
+
+        if (other.gameObject.CompareTag("DoorKey"))
+        {
+            keys.doorkey = true;
+            Destroy(other.gameObject);
+            audioSource.PlayOneShot(touchSound, volume);
+        }
+        if (other.gameObject.CompareTag("ChestKey"))
+        {
+            keys.chestkey = true;
+            Destroy(other.gameObject);
+            audioSource.PlayOneShot(touchSound, volume);
+        }
+
+        if (other.gameObject.CompareTag("Treasure") && keys.chestkey == true)
+        {
+
+            treasure = true;
+            chest = other.gameObject;
+            audioSource.PlayOneShot(touchSound, volume);
+        }
+
+
+    }
+    void OnTriggerExit(Collider other)
+    {
+        // Check if the player exits the trigger zone of the treasure
+        if (other.gameObject.CompareTag("Treasure"))
+        {
+            treasure = false;
+            chest = null;
+        }
+
     }
 
 }
